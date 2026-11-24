@@ -1,0 +1,198 @@
+:root {
+  --bg: #0b0d10;
+  --panel: #14171c;
+  --panel-2: #1b1f26;
+  --line: #2a2f38;
+  --text: #e6e8eb;
+  --muted: #9aa3ae;
+  --accent: #4ea1ff;
+  --gate: #5ea0c8;
+  --spot: #1c7ed6;
+  --ok: #3ecf6e;
+  --bad: #ff4d4d;
+  --panel-w: 320px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+body { font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+button { font: inherit; color: inherit; }
+code { font-size: 14px; background: var(--panel-2); padding: 1px 4px; border-radius: 3px; }
+
+#app {
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr var(--panel-w);
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "bar bar" "stage panel";
+}
+
+#bar {
+  grid-area: bar;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 600; font-size: 18px; margin-right: auto; white-space: nowrap; }
+.icao { color: var(--accent); letter-spacing: .5px; }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button {
+  background: transparent; border: 0; padding: 6px 12px; cursor: pointer; color: var(--muted);
+  border-right: 1px solid var(--line);
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #06121f; font-weight: 600; }
+.seg button:hover:not([aria-pressed="true"]) { color: var(--text); background: var(--panel-2); }
+
+#stage { grid-area: stage; position: relative; overflow: hidden; background: var(--bg); }
+#map { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+#map.dragging { cursor: grabbing; }
+
+#loading {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  color: var(--muted); background: var(--bg); pointer-events: none;
+}
+#loading[hidden] { display: none; }
+
+/* The quiz banner: full width, hanging under the top nav. It slides down
+   from behind the nav (the wrapper clips it) and back up when the quiz
+   ends. Blue while asking, green after a correct answer, red after a miss. */
+#bar { position: relative; z-index: 30; }
+#prompt-wrap {
+  position: absolute; top: 100%; left: 0; right: 0;
+  overflow: hidden; pointer-events: none;
+}
+#prompt {
+  --tone: #1f6fd6;
+  background: var(--tone); color: #fff;
+  padding: 8px 16px 9px; text-align: center;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .45);
+  transform: translateY(-110%);
+  transition: transform .3s cubic-bezier(.2, .8, .2, 1), background-color .2s ease;
+}
+#prompt.show { transform: none; }
+#prompt.ok { --tone: #18924b; }
+#prompt.bad { --tone: #cf2e2e; }
+#prompt .ask { font-size: 21px; font-weight: 500; }
+#prompt .ask b { font-size: 29px; font-weight: 800; margin-left: 6px; letter-spacing: .5px; }
+#prompt .sub { font-size: 15px; opacity: .9; margin-top: 1px; }
+#prompt .good, #prompt .miss { font-weight: 800; }
+@media (prefers-reduced-motion: reduce) {
+  #prompt { transition: background-color .2s ease; }
+}
+
+#zoom { position: absolute; right: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+#zoom button {
+  width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--line);
+  background: rgba(20, 23, 28, .92); cursor: pointer; font-size: 18px; line-height: 1;
+}
+#zoom button:hover { border-color: var(--accent); }
+
+#panel {
+  grid-area: panel; overflow-y: auto; background: var(--panel); border-left: 1px solid var(--line);
+  padding: 4px 16px 16px;
+}
+.block { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.block[hidden] { display: none; }
+.block h2 { margin: 0 0 8px; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+.hint { color: var(--muted); font-size: 14.5px; margin: 6px 0; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button {
+  min-width: 36px; padding: 5px 9px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--muted);
+}
+.chips button[aria-pressed="true"] { border-color: var(--accent); color: var(--text); background: #1d3550; }
+.chips button:disabled { opacity: .45; cursor: not-allowed; }
+
+.check { display: flex; align-items: center; gap: 8px; margin: 6px 0; cursor: pointer; }
+.primary {
+  margin-top: 8px; width: 100%; padding: 9px 12px; border-radius: 8px; cursor: pointer;
+  border: 0; background: var(--accent); color: #06121f; font-weight: 600;
+}
+.primary:hover { filter: brightness(1.1); }
+.status { font-variant-numeric: tabular-nums; }
+.status .big { font-size: 28px; font-weight: 600; }
+.status .row { display: flex; justify-content: space-between; color: var(--muted); }
+.status .row b { color: var(--text); font-weight: 600; }
+
+.info { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; margin-top: 8px; }
+.info .id { font-size: 22px; font-weight: 700; }
+.summary { margin-top: 10px; }
+.summary .score { font-size: 32px; font-weight: 700; }
+.summary ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
+.summary li b { color: var(--text); }
+
+.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 10px; font-size: 14.5px; color: var(--muted); }
+.legend span { display: flex; align-items: center; gap: 6px; }
+.legend i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; flex: none; }
+.legend i.sq { border-radius: 2px; }
+
+/* at the top of the panel, at least as tall as the quiz banner, so the
+   banner covers only this and not the controls below */
+#credits {
+  color: #6c7480; font-size: 13.5px;
+  padding: 8px 0; min-height: 84px;
+  border-bottom: 1px solid var(--line);
+}
+#credits a { color: inherit; }
+
+/* runways: drawn on the diagram; the photo already shows them, so the
+   satellite view only gets their designators */
+.rwy-body { fill: #e8e8e8; }
+.rwy-cl { stroke: #050505; stroke-width: 0.9; stroke-dasharray: 36 24; fill: none; }
+.base-satellite .rwy-body, .base-satellite .rwy-cl { display: none; }
+
+/* taxiways overlay: yellow centerlines and location-sign style letters */
+.twy-cl {
+  fill: none; stroke: #ffd200; stroke-width: 1.8; opacity: .9;
+  stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke;
+}
+.twy-sign rect { fill: #111; stroke: #ffd200; stroke-width: 1.5; }
+.twy-sign text {
+  font: 800 12.5px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  fill: #ffd200; text-anchor: middle; dominant-baseline: central;
+}
+#twy-labels { pointer-events: none; }
+.rwy-lbl {
+  font: 800 16px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  fill: #fff; paint-order: stroke; stroke: #000; stroke-width: 4px; stroke-linejoin: round;
+  text-anchor: middle; dominant-baseline: central; pointer-events: none;
+}
+
+/* markers */
+.mk { cursor: pointer; }
+.mk.off { display: none; }
+.mk circle, .mk rect { fill: var(--c, var(--gate)); stroke: #0b0d10; stroke-width: 1.5; }
+.mk-spot rect { fill: var(--c, var(--spot)); stroke: #fff; stroke-width: 1.2; }
+.mk text {
+  font: 700 13.8px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  fill: #fff; paint-order: stroke; stroke: #000; stroke-width: 3px; stroke-linejoin: round;
+  pointer-events: none; display: none;
+}
+.mk.lbl text { display: block; }
+.plain .mk circle { fill: var(--gate); }
+.plain .mk-spot rect { fill: var(--spot); }
+.mk.sel circle, .mk.sel rect { stroke: #fff; stroke-width: 3; }
+.mk.target circle, .mk.target rect { fill: var(--ok); stroke: #fff; stroke-width: 2.5; }
+.mk.wrong circle, .mk.wrong rect { fill: var(--bad); stroke: #fff; stroke-width: 2.5; }
+.mk.target text, .mk.wrong text { display: block; font-size: 16.8px; }
+.mk.moved circle, .mk.moved rect { stroke: #ffd43b; stroke-width: 2.5; }
+
+@media (max-width: 760px) {
+  #app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas: "bar" "stage" "panel";
+  }
+  #bar { gap: 8px; padding: 6px 8px; }
+  .brand { font-size: 16px; width: 100%; }
+  .seg button { padding: 5px 8px; font-size: 15px; }
+  #panel { border-left: 0; border-top: 1px solid var(--line); max-height: 38dvh; padding: 0 12px 12px; }
+  #prompt .ask { font-size: 19px; }
+  #prompt .ask b { font-size: 26px; }
+}

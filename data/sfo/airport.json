@@ -1,0 +1,22 @@
+{
+  "icao": "KSFO",
+  "name": "San Francisco International",
+  "chartRef": "Jeppesen 10-9B, 23 OCT 26 (eff 29 Oct)",
+  "frame": {
+    "center": [37.6161, -122.3869],
+    "rotation": 27.9,
+    "bounds": [-820, -1020, 1020, 760],
+    "note": "Meters from center, rotated 27.9 degrees counterclockwise so runways 1/19 run up and down and 10/28 run across (ASDE-X orientation). x right, y down."
+  },
+  "home": [-760, -560, 560, 760],
+  "layers": {
+    "satellite": {
+      "file": "satellite.webp",
+      "credit": "Imagery: Esri World Imagery (Vantor, 19 Mar 2026)"
+    },
+    "chart": {
+      "file": "chart.svg",
+      "credit": "Map data: &copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap contributors</a> (ODbL)"
+    }
+  }
+}

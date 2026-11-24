@@ -1,0 +1,5 @@
+.cache/
+__pycache__/
+# Salesforce CLI / VS Code extension state, not part of this project
+.sf/
+.sfdx/

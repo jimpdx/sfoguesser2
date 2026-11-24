@@ -1,0 +1,96 @@
+# KSFO Ground Trainer
+
+A browser trainer for the gates and ramp spots at San Francisco International, built for VATSIM ZOA ground and ramp controllers. It replaces the older [Airport Gates Guesser](https://dreamnid.github.io/airport-gates-guesser/public/sfo.html).
+
+The map is drawn the way the ASDE-X display shows SFO: rotated 27.9 degrees so runways 1/19 run straight up and down and 10/28 run straight across.
+
+## Modes
+
+- **Learn**: every gate and spot on the map, colored by boarding area. Turn labels off to quiz yourself: tap a marker to reveal it, tap again to hide it.
+- **Quick 10**: ten gates with no repeats, scored as a percent with a time. A miss shows the gate you clicked in red and the right one in green before moving on.
+- **Streak**: keep going until your first miss. Best streaks are saved in the browser for each set of areas.
+- **Base map**: a diagram in the style of the airport chart (black field, gray ramps, white terminals, runways) or a March 2026 satellite photo. Runway designators show on both.
+- **Taxiways**: an on/off toggle that draws taxiway centerlines in yellow, with a sign-style letter for every named taxiway in view (A, B, D, E, K, Q, T and the rest).
+- **Areas**: limit any mode to some boarding areas (A to G) or to the spots only.
+
+To link to one part of the airport, add `?view=x0,y0,x1,y1` to the URL (meters in the map's rotated frame, x to the right, y down; for example `?view=-650,-800,250,-520` frames the north exits).
+
+Drag to pan, and scroll or pinch to zoom. Keys: `+`, `-`, `0` for the home view, `L` to toggle labels in Learn mode, `T` to toggle taxiways, and Space or Enter to continue after a miss.
+
+## What's on the map
+
+All gates and spots come from the Jeppesen 10-9B dated 23 OCT 26 (effective 29 Oct).
+
+- **116 gates**: A1-A15, B1-B27, C1 and C3-C11, D1-D12 and D14-D16, E1-E13, F1-F22, G1-G14.
+- **No separate sub-positions**: the lettered ones (A4R, A4T, B5S, D8V, D12A, E10U, F3A, G12S and the rest) are folded into their base gate, since controllers call them by the base gate ("Alpha Four").
+- **Not included**: C2 (gone from the current chart) and the remote stands G103-G105, Plot 2, Plot 6 and Plot 9.
+- **18 spots**: 1, 2, 3, 4, 4A, 5, 5A, 5B, 6, 6A, 6B, 7, 7A, 7B, 8, 9, 10, 11.
+
+Where each point came from:
+
+- **106 gates**: the stop end of the stand lead-in line mapped in OpenStreetMap.
+- **2 gates**: A4 and B8 have no lead-in line in OSM, so A4 uses its OSM gate point and B8 its jet bridge tip.
+- **8 gates placed by hand**:
+  - D2, between the D1 and D3 stops.
+  - G12 and G14, wrapped around the G13 widebody stand.
+  - E1 and F1-F4, from the chart labels. These are in the Terminal 3 West construction zone in the satellite photo.
+- **16 spots**: placed on the blue painted boxes visible in the satellite photo. The 5s and 6s are spread to the same spacing as the 7s (about 27 m apart instead of 21 m) so they're easier to tell apart.
+- **Spots 10 and 11**: follow the chart. Plot 9 has been rebuilt since the photo was taken, so these two are worth a check by someone who knows the current layout.
+
+The `src` field in `data/sfo/gates.json` records each point's source.
+
+## Running it
+
+It's a static site with no build step and no dependencies. Serve the folder over http (the page loads JSON, so opening the file directly won't work):
+
+```
+python -I tools/serve.py
+```
+
+Then open http://127.0.0.1:8000. This server turns browser caching off, so a normal reload always picks up your edits. Plain `python -m http.server` works too, but browsers may then keep an old `app.js` until you force-reload with Ctrl+Shift+R. For hosting, turn on GitHub Pages for the repository root.
+
+## Updating gates
+
+When SFO renumbers or moves gates:
+
+1. Open `index.html?edit`. Drag markers to their new spots; moved ones get a yellow ring.
+2. Click "Download gates.json", replace `data/sfo/gates.json` with it, and commit.
+
+To add or remove a gate, edit `data/sfo/gates.json` by hand (each point has an id, kind, area, lat and lon), then fine-tune its position in edit mode.
+
+Labels sit above each marker. Where neighbors crowd that space, a point can carry `"label": "left"` or `"label": "right"` (F20-F22 use left; spots 5, 5A and 5B use right).
+
+Edit mode can lay a new chart over the map as a placement guide. Take a screenshot of the new 10-9B, read two longitude ticks and two latitude ticks off its border in pixels, and run:
+
+```
+python -I tools/reference_overlay.py chart.png --lon 122.5=-122.398333 --lon 1353.5=-122.380 --lat 147.5=37.621667 --lat 1419.5=37.606667 --crop 29,96,1384,1558
+```
+
+That writes `.cache/reference.png`, which only exists on your machine (the chart is Jeppesen's copyright and is never committed). Tick "Reference chart overlay" in edit mode to see it.
+
+## Rebuilding the base maps
+
+These need Python 3 with Pillow. Outputs go to `data/sfo/`; downloads are cached in `.cache/` (gitignored).
+
+| Script | Does |
+|---|---|
+| `tools/fetch_osm.py` | Downloads SFO airfield geometry from OpenStreetMap |
+| `tools/build_chart.py` | Draws `chart.svg` from that geometry plus `tools/ramp_outline.json`, and writes `runways.json` (thresholds and designators) and `taxiways.json` (centerlines and where each letter goes) |
+| `tools/build_imagery.py` | Downloads Esri World Imagery tiles and builds the rotated `satellite.webp` |
+| `tools/seed_gates.py` | One-time: seeds `gates.json` from OSM plus hand placements (refuses to overwrite) |
+
+After editing anything in `tools/build_chart.py`, run `python -I tools/build_chart.py` to regenerate `data/sfo/chart.svg`, `runways.json` and `taxiways.json`; the page only reads those generated files.
+
+Taxiway letters are placed automatically, except for rows lined up by hand in `ALIGNED` at the top of the taxiway section of `tools/build_chart.py`: Q, K, D, T and E across the exits between runway 28L and taxiway B, and W, G, H, M and M1 east of taxiway B, halfway to runway 1L. Add a row there to line up others. `MOVED` in the same file shifts single letters (the B between T and E).
+
+The spot lanes are drawn tidier than OpenStreetMap has them (`LANE_LENGTHS`): the 5, 6 and 7 lanes each run 200 m in from taxiway A and pass through their spot markers, and lanes 8 and 9 run 287.5 m straight on from B4 and B5. Taxilanes M3, M4 and M5 are trimmed so their north ends line up (`M_LANES`).
+
+The rotated frame (center, angle, bounds) lives in `data/sfo/airport.json`. `tools/common.py` and `app.js` share the projection math, so keep the two in sync if you change it.
+
+## Credits
+
+- Chart drawing: map data from [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL.
+- Satellite: Esri World Imagery (Vantor, captured 19 March 2026), for non-commercial use.
+- Gate and spot list checked against the Jeppesen 10-9B (not included).
+
+For flight simulation only. Not for real-world navigation.

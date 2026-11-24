@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>KSFO Ground Trainer</title>
+  <meta name="description" content="Learn the gates and ramp spots at San Francisco International (KSFO) for VATSIM ground and ramp control.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header id="bar">
+    <div class="brand"><span class="icao">KSFO</span> Ground Trainer</div>
+    <nav class="seg" id="modes" aria-label="Mode">
+      <button type="button" data-mode="learn">Learn</button>
+      <button type="button" data-mode="ten">Quick 10</button>
+      <button type="button" data-mode="streak">Streak</button>
+    </nav>
+    <nav class="seg" id="bases" aria-label="Base map">
+      <button type="button" data-base="chart">Diagram</button>
+      <button type="button" data-base="satellite">Satellite</button>
+    </nav>
+    <nav class="seg" id="overlays" aria-label="Overlays">
+      <button type="button" data-overlay="taxiways" title="Show or hide taxiways (T)">Taxiways</button>
+    </nav>
+    <!-- quiz banner: slides down from under the nav -->
+    <div id="prompt-wrap"><div id="prompt" role="status" aria-live="polite"></div></div>
+  </header>
+
+  <main id="stage">
+    <svg id="map" aria-label="SFO terminal map">
+      <g id="world">
+        <g id="layer-satellite"></g>
+        <g id="layer-chart" class="sfo-chart"></g>
+        <g id="layer-taxiways"></g>
+        <g id="layer-runways"></g>
+        <g id="layer-ref"></g>
+      </g>
+      <g id="rwy-labels"></g>
+      <g id="twy-labels"></g>
+      <g id="marks"></g>
+    </svg>
+    <div id="zoom">
+      <button type="button" data-zoom="in" title="Zoom in (+)">+</button>
+      <button type="button" data-zoom="out" title="Zoom out (-)">&minus;</button>
+      <button type="button" data-zoom="home" title="Fit the terminals (0)">&#8962;</button>
+    </div>
+    <div id="loading">Loading map&hellip;</div>
+  </main>
+
+  <aside id="panel">
+    <!-- first in the panel: the quiz banner covers this, not the controls -->
+    <footer id="credits"></footer>
+
+    <section class="block">
+      <h2>Areas</h2>
+      <div id="areas" class="chips"></div>
+      <p class="hint" id="pool-count"></p>
+    </section>
+
+    <section class="block" data-for="learn">
+      <h2>Learn</h2>
+      <label class="check"><input type="checkbox" id="opt-labels" checked> Show all labels</label>
+      <label class="check"><input type="checkbox" id="opt-colors" checked> Color by boarding area</label>
+      <p class="hint">With labels off, tap a gate to reveal it, then tap again to hide it. Drag to pan, scroll or pinch to zoom.</p>
+      <div id="info" class="info" hidden></div>
+      <div id="legend" class="legend"></div>
+    </section>
+
+    <section class="block" data-for="ten">
+      <h2>Quick 10</h2>
+      <p class="hint">Ten gates from the areas above, no repeats. Your score is the percent you get right.</p>
+      <div id="ten-status" class="status"></div>
+      <button type="button" class="primary" id="ten-start">Start</button>
+      <div id="ten-summary" class="summary" hidden></div>
+    </section>
+
+    <section class="block" data-for="streak">
+      <h2>Streak</h2>
+      <p class="hint">Keep going until you miss one. Your best streak is saved for each set of areas.</p>
+      <div id="streak-status" class="status"></div>
+      <button type="button" class="primary" id="streak-start">Start</button>
+    </section>
+
+    <section class="block" data-for="edit">
+      <h2>Edit gates</h2>
+      <p class="hint">Drag a marker to move it, then download <code>gates.json</code> and commit it to <code>data/sfo/</code>.</p>
+      <div id="edit-info" class="info">Nothing selected.</div>
+      <label class="check"><input type="checkbox" id="opt-ref"> Reference chart overlay</label>
+      <input type="range" id="ref-opacity" min="0" max="100" value="50" aria-label="Overlay opacity">
+      <p class="hint" id="ref-note">The overlay is <code>.cache/reference.png</code>, made by <code>tools/reference_overlay.py</code>. It only exists on your machine.</p>
+      <button type="button" class="primary" id="edit-export">Download gates.json</button>
+      <p class="hint" id="edit-count"></p>
+    </section>
+  </aside>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

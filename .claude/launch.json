@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "sfoguesser2",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-I", "tools/serve.py", "8765"],
+      "port": 8765
+    }
+  ]
+}
