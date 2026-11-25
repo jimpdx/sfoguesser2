@@ -1,0 +1,101 @@
+rules_version = '2';
+
+// LEADERBOARD rules for the KSFO Ground Trainer.
+//
+//   airports/{icao}/runs/{id}    one per challenge started
+//   airports/{icao}/scores/{id}  a posted score, sharing its run's id
+//
+// Firestore stamps a run's startedAt when a challenge starts and endedAt
+// when it ends. A score can only be posted once per run, and its time has
+// to fit the time Firestore saw between those stamps. Scores can't be
+// edited, and only admins can delete them.
+//
+//   admins/{uid}  one document per admin, named by Firebase Auth user ID.
+//                 Added and removed in the Firebase console only.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // the page asks whether the signed-in account is an admin
+    match /admins/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+    }
+
+    function runPath(apt, id) {
+      return /databases/$(database)/documents/airports/$(apt)/runs/$(id);
+    }
+
+    function scorePath(apt, id) {
+      return /databases/$(database)/documents/airports/$(apt)/scores/$(id);
+    }
+
+    // Names: 1 to 6 of A-Z, 0-9 and _, and not rude.
+    function goodName(n) {
+      return n is string
+        && n.matches('[A-Z0-9_]{1,6}')
+        && !n.matches('.*(FUCK|SHIT|CUNT|COCK|TWAT|SLUT|WHORE|FAG|NIGG|NAZI|PORN|PUSSY).*');
+    }
+
+    // Each correct answer holds the green banner for 2 s (1.9 s allows for
+    // timer jitter). Quick 10 times run start to finish, so they also have
+    // to match Firestore's clock to within 3 s either way.
+    function goodTen(s, played) {
+      return s.of is int && s.of >= 1 && s.of <= 10 && s.score <= s.of
+        && s.ms >= s.score * 1900
+        && s.ms >= played - 3000;
+    }
+
+    // Streak times stop at the last correct answer, before the miss, so
+    // they can be shorter than the run but never longer.
+    function goodStreak(s) {
+      return !('of' in s) && s.ms >= (s.score - 1) * 1900;
+    }
+
+    function goodScore(s, run, after, now) {
+      let played = run.endedAt.toMillis() - run.startedAt.toMillis();
+      return s.keys().hasOnly(['name', 'mode', 'pool', 'score', 'of', 'ms', 'at'])
+        && goodName(s.name)
+        && s.mode == run.mode
+        && s.pool == run.pool
+        && run.used == false
+        && after.used == true
+        && s.at == now
+        && s.score is int && s.score >= 1
+        && s.ms is int && s.ms <= played + 3000
+        && (s.mode == 'ten' ? goodTen(s, played) : goodStreak(s));
+    }
+
+    match /airports/{apt}/runs/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['mode', 'pool', 'startedAt', 'used'])
+        && request.resource.data.mode in ['ten', 'streak']
+        && request.resource.data.pool is string
+        && request.resource.data.pool.matches('[A-Za-z0-9,]{1,80}')
+        && request.resource.data.startedAt == request.time
+        && request.resource.data.used == false;
+
+      // stamp the end, once
+      allow update: if !('endedAt' in resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['endedAt'])
+        && request.resource.data.endedAt == request.time;
+
+      // mark it used, in the same write that posts its score
+      allow update: if 'endedAt' in resource.data
+        && resource.data.used == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used'])
+        && request.resource.data.used == true
+        && existsAfter(scorePath(apt, id));
+    }
+
+    match /airports/{apt}/scores/{id} {
+      allow get: if true;
+      allow list: if isAdmin() || request.query.limit <= 10;
+      allow create: if goodScore(request.resource.data,
+        get(runPath(apt, id)).data, getAfter(runPath(apt, id)).data, request.time);
+      allow delete: if isAdmin();
+    }
+  }
+}

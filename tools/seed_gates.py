@@ -34,12 +34,15 @@ AREAS = [
     {"id": "spots", "name": "Spots", "terminal": "Ramp reporting points"},
 ]
 
-# Gates on the 23 OCT 26 10-9B. No C2 (removed), no D13.
+# Gates on the 23 OCT 26 10-9B. No C2 (removed), no D13. No D2 either:
+# closed when Southwest moved into Terminal 2 (jet bridge gone, the stand
+# holds equipment); to bring it back, add it here and restore its MANUAL
+# entry, (336, -266).
 GATES = (
     [f"A{i}" for i in range(1, 16)]
     + [f"B{i}" for i in range(1, 28)]
     + ["C1"] + [f"C{i}" for i in range(3, 12)]
-    + [f"D{i}" for i in range(1, 13)] + ["D14", "D15", "D16"]
+    + ["D1"] + [f"D{i}" for i in range(3, 13)] + ["D14", "D15", "D16"]
     + [f"E{i}" for i in range(1, 14)]
     + [f"F{i}" for i in range(1, 23)]
     + [f"G{i}" for i in range(1, 15)]
@@ -50,10 +53,9 @@ SPOTS = ["1", "2", "3", "4", "4A", "5", "5A", "5B", "6", "6A", "6B", "7", "7A", 
 # Frame meters (x right, y down), read off the satellite image with the
 # 10-9B overlaid (tools/reference_overlay.py).
 MANUAL = {
-    # Gates OSM lacks. D2 sits between the D1 and D3 stops; E1 and F1-F4
-    # are in the T3 West construction zone (March 2026 imagery) and follow
-    # the chart's labels; G12 and G14 wrap the G13 widebody stand.
-    "D2": (336, -266),
+    # Gates OSM lacks. E1 and F1-F4 are in the T3 West construction zone
+    # (March 2026 imagery) and follow the chart's labels; G12 and G14 wrap
+    # the G13 widebody stand.
     "E1": (-138, -312),
     # F1-F4: a column about 40 m apart along the T3 West face (the chart's
     # F4 label sits on the terminal roof in the photo)

@@ -1,5 +1,8 @@
 .cache/
 __pycache__/
+# Firebase CLI and emulator leftovers
+.firebase/
+*-debug.log
 # Salesforce CLI / VS Code extension state, not part of this project
 .sf/
 .sfdx/

@@ -9,6 +9,13 @@
     "note": "Meters from center, rotated 27.9 degrees counterclockwise so runways 1/19 run up and down and 10/28 run across (ASDE-X orientation). x right, y down."
   },
   "home": [-760, -560, 560, 760],
+  "leaderboard": {
+    "projectId": "ksfo-ground-trainer",
+    "apiKey": "AIzaSyB2QFVpT9yO_4Ys65MPZZUrmmahDKfKd5E",
+    "authDomain": "ksfo-ground-trainer.firebaseapp.com",
+    "signIn": ["google", "github"],
+    "note": "Firebase project for the LEADERBOARD (firestore.rules). Leave projectId empty to hide it. Web API keys are public by design; the rules protect the data."
+  },
   "layers": {
     "satellite": {
       "file": "satellite.webp",

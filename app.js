@@ -13,6 +13,9 @@
   const DATA = 'data/sfo/';
   const STORE = 'ksfoGroundTrainer.';
   const EDIT = new URLSearchParams(location.search).has('edit');
+  const ADMIN = new URLSearchParams(location.search).has('admin');
+  // Google's Firebase SDK, loaded only by the ?admin view (for Google sign-in)
+  const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/13.4.0';
   const SVGNS = 'http://www.w3.org/2000/svg';
   const AREA_COLORS = {
     A: '#ff6b6b', B: '#ffa94d', C: '#ffd43b', D: '#69db7c',
@@ -49,6 +52,8 @@
     const s = Math.floor(ms / 1000);
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   };
+  // with tenths, for the LEADERBOARD where times break ties
+  const fmtTenths = (ms) => `${fmtTime(ms)}.${Math.floor((ms % 1000) / 100)}`;
   const store = {
     get(k, d) { try { const v = localStorage.getItem(STORE + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
     set(k, v) { try { localStorage.setItem(STORE + k, JSON.stringify(v)); } catch { /* private mode */ } },
@@ -71,6 +76,10 @@
     quiz: null,
     moved: new Set(),
   };
+  // LEADERBOARD (see the leaderboard section); url stays empty when off
+  const board = { url: '', docs: '', apiKey: '', icao: '', emu: false, cache: new Map(), pending: null, mine: null, showing: '' };
+  // ?admin view: Google sign-in; `is` once Firestore confirms an admins doc
+  const admin = { auth: null, sdk: null, user: null, is: false, busy: '', note: '' };
 
   // ---------- projection ----------
 
@@ -119,6 +128,7 @@
     buildMarks();
     buildAreaChips();
     buildLegend();
+    setupBoard();
     bindUI();
     setBase(state.base);
     setMode(EDIT ? 'edit' : 'learn');
@@ -584,6 +594,7 @@
     if (mode === 'ten') renderTenStatus();
     if (mode === 'streak') renderStreakStatus();
     if (mode === 'edit') renderEditCount();
+    showBoard();
     refreshMarks();
   }
 
@@ -598,6 +609,7 @@
     $('#pool-count').textContent = `${gates} gates${spots ? `, ${spots} spots` : ''} selected.`;
     if (state.mode === 'streak') renderStreakStatus();
     if (state.mode === 'ten') renderTenStatus();
+    showBoard();
     refreshMarks();
   }
 
@@ -666,27 +678,29 @@
   function startQuiz(kind) {
     const pool = poolPoints();
     if (!pool.length) return;
+    if (state.quiz) clearInterval(state.quiz.timer);
     const q = {
-      kind, pool, answers: [], t0: performance.now(), waiting: false, done: false,
-      locked: false, recent: [], streak: 0, show: null, target: null,
+      kind, pool, poolKey: poolKey(), answers: [], t0: performance.now(), waiting: false, done: false,
+      locked: false, recent: [], streak: 0, lastOk: 0, show: null, target: null,
     };
     if (kind === 'ten') q.queue = shuffle(pool.slice()).slice(0, Math.min(TEN, pool.length));
     state.quiz = q;
+    board.pending = null;
+    startRun(q);
     // a focused Start button would eat Space (our "next" key) and restart
     if (document.activeElement) document.activeElement.blur();
     lockAreas(true);
     $('#ten-summary').hidden = true;
     $(`#${kind}-start`).textContent = 'Restart';
-    if (kind === 'ten') {
-      clearInterval(q.timer);
-      q.timer = setInterval(renderTenStatus, 250);
-    }
+    q.timer = setInterval(kind === 'ten' ? renderTenStatus : renderStreakStatus, 250);
+    showBoard();
     nextQuestion();
   }
 
   function stopQuiz() {
     const q = state.quiz;
     if (q) clearInterval(q.timer);
+    board.pending = null;
     state.quiz = null;
     lockAreas(false);
     $('#ten-start').textContent = 'Start';
@@ -755,6 +769,7 @@
     q.answers.push({ target: q.target, clicked: id, ok });
     if (ok) {
       q.streak += 1;
+      q.lastOk = performance.now();
       q.show = { target: q.target };
       q.locked = true;
       showPrompt(`<div class="ask"><span class="good">Correct</span>, that's <b>${name(q.target)}</b></div>`
@@ -774,6 +789,11 @@
     requestAnimationFrame(() => ensureVisible([q.target, id]));
     if (q.kind === 'streak') {
       q.done = true;
+      clearInterval(q.timer);
+      // the clock stops at the last correct answer, not at the miss
+      q.ms = q.streak ? Math.round(q.lastOk - q.t0) : 0;
+      endRun(q);
+      offerEntry(q, { score: q.streak, ms: q.ms });
       lockAreas(false);
       const key = `best.${poolKey()}`;
       const best = store.get(key, 0);
@@ -795,8 +815,10 @@
     q.done = true;
     clearInterval(q.timer);
     q.elapsed = performance.now() - q.t0;
+    endRun(q);
     lockAreas(false);
     const right = q.answers.filter((a) => a.ok).length;
+    offerEntry(q, { score: right, of: q.answers.length, ms: Math.round(q.elapsed) });
     const pct = Math.round((100 * right) / q.answers.length);
     const key = `ten.${poolKey()}`;
     const prev = store.get(key, null);
@@ -838,8 +860,426 @@
   function renderStreakStatus() {
     const q = state.quiz && state.quiz.kind === 'streak' ? state.quiz : null;
     const best = store.get(`best.${poolKey()}`, 0);
+    const ms = !q ? 0 : q.done ? q.ms : performance.now() - q.t0;
     $('#streak-status').innerHTML = `<div class="big">${q ? q.streak : 0}</div>`
+      + (q ? `<div class="row"><span>Time</span><b>${fmtTime(ms)}</b></div>` : '')
       + `<div class="row"><span>Best for these areas</span><b>${best}</b></div>`;
+  }
+
+  // ---------- leaderboard ----------
+  //
+  // Top 10 per challenge mode and set of areas, kept in Firestore (rules in
+  // firestore.rules). The page calls Firestore's REST API with fetch, so
+  // there's still no library to load. Add ?emulator (or ?emulator=PORT) to
+  // the URL to use the local Firestore emulator instead.
+
+  const NAME_OK = /^[A-Z0-9_]{1,6}$/;
+  const NAME_RUDE = /(FUCK|SHIT|CUNT|COCK|TWAT|SLUT|WHORE|FAG|NIGG|NAZI|PORN|PUSSY)/; // same list as the rules
+  const BOARD_TTL = 30000; // ms to reuse a fetched board before fetching it again
+
+  function setupBoard() {
+    const cfg = airport.leaderboard || {};
+    const emu = new URLSearchParams(location.search).get('emulator');
+    const project = emu !== null ? 'demo-ksfo' : cfg.projectId;
+    if (!project || EDIT) return;
+    const host = emu !== null ? `http://127.0.0.1:${emu || 8085}` : 'https://firestore.googleapis.com';
+    board.docs = `projects/${project}/databases/(default)/documents`;
+    board.url = `${host}/v1/${board.docs}`;
+    board.apiKey = emu !== null ? '' : cfg.apiKey || '';
+    board.icao = airport.icao;
+    board.emu = emu !== null;
+
+    const sec = $('#board');
+    sec.addEventListener('input', (e) => {
+      if (e.target.id !== 'board-name' || !board.pending) return;
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 6);
+      board.pending.typed = e.target.value;
+    });
+    sec.addEventListener('keydown', (e) => {
+      if (e.target.id !== 'board-name') return;
+      if (e.key === 'Enter') { e.preventDefault(); submitEntry(); }
+      if (e.key === 'Escape') { e.preventDefault(); skipEntry(); }
+    });
+    sec.addEventListener('click', (e) => {
+      const del = e.target.closest('[data-del]');
+      if (del) { adminDeleteOne(del.dataset.del); return; }
+      const b = e.target.closest('[data-act]');
+      const act = b && b.dataset.act;
+      if (act === 'save') submitEntry();
+      if (act === 'skip') skipEntry();
+      if (act === 'signin') adminSignIn(b.dataset.provider);
+      if (act === 'signout') admin.sdk.signOut(admin.auth);
+      if (act === 'copy-uid') navigator.clipboard.writeText(admin.user.uid).then(() => { admin.note = 'Copied.'; renderAdmin(); });
+      if (act === 'clear') adminClear(false);
+      if (act === 'clear-all') adminClear(true);
+    });
+    if (ADMIN) setupAdmin();
+  }
+
+  const fsStr = (v) => ({ stringValue: v });
+  const fsInt = (v) => ({ integerValue: String(v) });
+  const docName = (coll, id) => `${board.docs}/airports/${board.icao}/${coll}/${id}`;
+
+  // token: a Firebase Auth ID token, for the admin view's reads and deletes
+  async function fsCall(path, body, token) {
+    const key = board.apiKey ? `?key=${encodeURIComponent(board.apiKey)}` : '';
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const r = await fetch(`${board.url}${path}${key}`, {
+      method: body === undefined ? 'GET' : 'POST', headers, body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(`Firestore ${r.status}`);
+    return r.json();
+  }
+  const commit = (writes) => fsCall(':commit', { writes });
+
+  function newId() {
+    const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    return [...crypto.getRandomValues(new Uint8Array(20))].map((b) => abc[b % abc.length]).join('');
+  }
+
+  // Every challenge gets a run record; Firestore stamps when it started and
+  // ended, and the rules check a posted time against those stamps.
+  function startRun(q) {
+    if (!board.url) return;
+    const id = newId();
+    q.run = {
+      id,
+      started: commit([{
+        update: { name: docName('runs', id), fields: { mode: fsStr(q.kind), pool: fsStr(q.poolKey), used: { booleanValue: false } } },
+        updateTransforms: [{ fieldPath: 'startedAt', setToServerValue: 'REQUEST_TIME' }],
+        currentDocument: { exists: false },
+      }]).then(() => true, () => false),
+    };
+  }
+
+  function endRun(q) {
+    if (!q.run) return;
+    q.run.ended = q.run.started.then((ok) => ok && commit([{
+      update: { name: docName('runs', q.run.id), fields: {} },
+      updateMask: { fieldPaths: [] },
+      updateTransforms: [{ fieldPath: 'endedAt', setToServerValue: 'REQUEST_TIME' }],
+      currentDocument: { exists: true },
+    }]).then(() => true, () => false));
+  }
+
+  async function postScore(q, entry) {
+    if (!(await q.run.ended)) throw new Error('run not recorded');
+    const fields = {
+      name: fsStr(entry.name), mode: fsStr(q.kind), pool: fsStr(q.poolKey),
+      score: fsInt(entry.score), ms: fsInt(entry.ms),
+    };
+    if (q.kind === 'ten') fields.of = fsInt(entry.of);
+    await commit([
+      {
+        update: { name: docName('scores', q.run.id), fields },
+        updateTransforms: [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }],
+        currentDocument: { exists: false },
+      },
+      {
+        update: { name: docName('runs', q.run.id), fields: { used: { booleanValue: true } } },
+        updateMask: { fieldPaths: ['used'] },
+        currentDocument: { exists: true },
+      },
+    ]);
+  }
+
+  // Quick 10: percent (right answers, since every round asks the same
+  // number), then time. Streak: count, then time. Earlier posts win ties.
+  async function fetchBoard(mode, pool) {
+    const eq = (field, value) => ({ fieldFilter: { field: { fieldPath: field }, op: 'EQUAL', value: fsStr(value) } });
+    const by = (field, direction) => ({ field: { fieldPath: field }, direction });
+    const res = await fsCall(`/airports/${board.icao}:runQuery`, {
+      structuredQuery: {
+        from: [{ collectionId: 'scores' }],
+        where: { compositeFilter: { op: 'AND', filters: [eq('mode', mode), eq('pool', pool)] } },
+        orderBy: [by('score', 'DESCENDING'), by('ms', 'ASCENDING'), by('at', 'ASCENDING')],
+        limit: 10,
+      },
+    });
+    return res.filter((x) => x.document).map(({ document: d }) => ({
+      id: d.name.split('/').pop(),
+      name: NAME_OK.test(d.fields.name.stringValue) ? d.fields.name.stringValue : '?',
+      score: Number(d.fields.score.integerValue),
+      of: d.fields.of ? Number(d.fields.of.integerValue) : 0,
+      ms: Number(d.fields.ms.integerValue),
+    }));
+  }
+
+  async function loadBoard(mode, pool, fresh = false) {
+    const key = `${mode}|${pool}`;
+    const hit = board.cache.get(key);
+    if (hit && !fresh && Date.now() - hit.t < BOARD_TTL) return hit.rows;
+    const rows = await fetchBoard(mode, pool);
+    board.cache.set(key, { rows, t: Date.now() });
+    return rows;
+  }
+
+  const beats = (a, b) => a.score > b.score || (a.score === b.score && a.ms < b.ms);
+
+  function poolLabel(key) {
+    const ids = key.split(',');
+    const all = data.areas.filter((a) => a.id !== 'spots').map((a) => a.id);
+    const gates = ids.filter((id) => id !== 'spots');
+    const spots = ids.includes('spots');
+    if (gates.length === all.length) return spots ? 'All gates and spots' : 'All gates';
+    if (!gates.length) return 'Spots only';
+    return `${gates.length === 1 ? 'Area' : 'Areas'} ${gates.join(', ')}${spots ? ' + spots' : ''}`;
+  }
+
+  // After a challenge: if the score makes the top 10, open a name entry row.
+  async function offerEntry(q, entry) {
+    if (!q.run || entry.score < 1) return;
+    let rows;
+    try {
+      rows = await loadBoard(q.kind, q.poolKey, true);
+    } catch {
+      showBoard();
+      return;
+    }
+    if (state.quiz !== q) return; // restarted or left the mode meanwhile
+    let rank = rows.findIndex((r) => beats(entry, r));
+    if (rank < 0) rank = rows.length;
+    if (rank < 10) {
+      board.pending = { q, entry, rank, typed: null, focus: true };
+      $('#prompt').insertAdjacentHTML('beforeend',
+        `<div class="sub hs">New high score: number ${rank + 1} on the LEADERBOARD. Enter your name there.</div>`);
+    }
+    showBoard();
+  }
+
+  async function submitEntry() {
+    const p = board.pending;
+    const input = $('#board-name');
+    if (!p || p.saving || !input) return;
+    const name = input.value;
+    if (!NAME_OK.test(name)) { boardNote('Use 1 to 6 letters, digits or _.'); return; }
+    if (NAME_RUDE.test(name)) { boardNote('Please pick another name.'); return; }
+    p.saving = true;
+    input.disabled = true;
+    boardNote('Saving...');
+    try {
+      await postScore(p.q, { ...p.entry, name });
+    } catch {
+      p.saving = false;
+      input.disabled = false;
+      input.focus();
+      boardNote("Couldn't save your score. Press Enter to try again.");
+      return;
+    }
+    store.set('name', name);
+    board.pending = null;
+    board.mine = p.q.run.id;
+    board.cache.delete(`${p.q.kind}|${p.q.poolKey}`);
+    showBoard();
+  }
+
+  function skipEntry() {
+    board.pending = null;
+    showBoard();
+  }
+
+  function boardNote(text) { $('#board-note').textContent = text; }
+
+  // Shows the board for a pending entry, else for the mode and areas now.
+  async function showBoard() {
+    const sec = $('#board');
+    const mode = state.mode === 'ten' || state.mode === 'streak' ? state.mode : null;
+    sec.hidden = !board.url || !mode;
+    if (sec.hidden) return;
+    const p = board.pending;
+    const [kind, pool] = p ? [p.q.kind, p.q.poolKey] : [mode, poolKey()];
+    const want = `${kind}|${pool}`;
+    board.showing = want;
+    $('#board-sub').textContent = `${kind === 'ten' ? 'Quick 10' : 'Streak'}: ${poolLabel(pool)}`;
+    let rows = null;
+    try { rows = await loadBoard(kind, pool); } catch { /* offline */ }
+    if (board.showing !== want) return; // a newer call took over
+    renderBoard(rows, kind);
+  }
+
+  function renderBoard(rows, kind) {
+    const p = board.pending;
+    $('#board-actions').hidden = !p;
+    if (!rows) {
+      $('#board-list').innerHTML = '';
+      boardNote('The leaderboard is offline right now.');
+      return;
+    }
+    const shown = rows.slice();
+    if (p) shown.splice(p.rank, 0, { ...p.entry, pending: true });
+    const score = (r) => (kind === 'ten' ? `${Math.round((100 * r.score) / (r.of || TEN))}%` : String(r.score));
+    const cells = (i, name, r) => `<span class="rk">${i + 1}</span>${name}`
+      + `<span class="sc">${r ? score(r) : ''}</span><span class="tm">${r ? fmtTenths(r.ms) : ''}</span>`;
+    let html = '';
+    for (let i = 0; i < 10; i++) {
+      const r = shown[i];
+      if (!r) {
+        html += `<li class="empty">${cells(i, '<span class="nm">------</span>')}</li>`;
+      } else if (r.pending) {
+        const value = (p.typed ?? store.get('name', '')).replace(/[^A-Z0-9_]/g, '').slice(0, 6);
+        html += `<li class="new r${i + 1}">${cells(i, `<input id="board-name" class="nm" maxlength="6" value="${value}"`
+          + ` autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Your name for the leaderboard">`, r)}</li>`;
+      } else {
+        const del = admin.is ? `<button type="button" class="del" data-del="${r.id}" title="Delete this score" aria-label="Delete ${r.name}'s score">&times;</button>` : '';
+        html += `<li class="r${i + 1}${r.id === board.mine ? ' mine' : ''}">${cells(i, `<span class="nm">${r.name}</span>`, r)}${del}</li>`;
+      }
+    }
+    $('#board').classList.toggle('admin', admin.is);
+    board.rows = rows;
+    $('#board-list').innerHTML = html;
+    if (p) {
+      boardNote('Your score made the board. Type a name, up to 6 letters, digits or _, then press Enter.');
+      const input = $('#board-name');
+      if (p.saving) input.disabled = true;
+      if (p.focus) { p.focus = false; input.focus(); input.select(); }
+    } else {
+      boardNote(rows.length ? `Ranked by ${kind === 'ten' ? 'percent' : 'streak'}, then time.` : 'No scores yet. Be the first.');
+    }
+  }
+
+  // ---------- leaderboard admin (?admin) ----------
+  //
+  // Sign in (Google or GitHub); if Firestore has admins/{your user ID}, you get a
+  // delete button on each score plus "Clear this board" and "Clear all
+  // boards". The rules enforce the same check, so the page can't be talked
+  // into deleting for anyone else. Admins are added in the Firebase console.
+
+  const escHtml = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+  async function setupAdmin() {
+    $('#board-admin').hidden = false;
+    if (board.emu) { admin.busy = 'The admin view works with the live leaderboard only (leave off ?emulator).'; renderAdmin(); return; }
+    admin.busy = 'Loading Google sign-in...';
+    renderAdmin();
+    try {
+      const [{ initializeApp }, sdk] = await Promise.all([
+        import(`${FIREBASE_SDK}/firebase-app.js`), import(`${FIREBASE_SDK}/firebase-auth.js`),
+      ]);
+      const cfg = airport.leaderboard;
+      admin.sdk = sdk;
+      admin.auth = sdk.getAuth(initializeApp({ apiKey: cfg.apiKey, authDomain: cfg.authDomain, projectId: cfg.projectId }));
+      sdk.onAuthStateChanged(admin.auth, async (user) => {
+        admin.user = user;
+        admin.is = false;
+        admin.note = '';
+        admin.busy = user ? 'Checking...' : '';
+        renderAdmin();
+        if (user) {
+          try { await fsCall(`/admins/${user.uid}`, undefined, await user.getIdToken()); admin.is = true; } catch { /* not an admin */ }
+          admin.busy = '';
+        }
+        renderAdmin();
+        showBoard();
+      });
+    } catch {
+      admin.busy = "Couldn't load Google sign-in.";
+      renderAdmin();
+    }
+  }
+
+  // Sign-in methods offered, from airport.json leaderboard.signIn. Each
+  // must also be turned on in Firebase (Authentication, Sign-in method).
+  const SIGN_IN = {
+    google: { label: 'Google', provider: (sdk) => new sdk.GoogleAuthProvider() },
+    github: { label: 'GitHub', provider: (sdk) => new sdk.GithubAuthProvider() },
+  };
+  const signInMethods = () => (airport.leaderboard.signIn || ['google']).filter((m) => SIGN_IN[m]);
+
+  async function adminSignIn(method) {
+    if (!SIGN_IN[method]) return;
+    try {
+      await admin.sdk.signInWithPopup(admin.auth, SIGN_IN[method].provider(admin.sdk));
+    } catch (err) {
+      const code = (err && err.code) || 'unknown';
+      admin.note = code === 'auth/unauthorized-domain'
+        ? `This site (${location.hostname}) isn't on the Firebase sign-in list yet: Authentication, Settings, Authorized domains.`
+        : code === 'auth/account-exists-with-different-credential'
+          ? 'That email already signs in another way. Use the method you signed in with before.'
+          : code === 'auth/popup-closed-by-user' ? '' : `Sign-in failed (${code}).`;
+      renderAdmin();
+    }
+  }
+
+  function renderAdmin() {
+    const box = $('#board-admin');
+    if (box.hidden) return;
+    const u = admin.user;
+    let html = '<div class="admin-title">Admin</div>';
+    if (admin.busy) {
+      html += `<p class="hint">${escHtml(admin.busy)}</p>`;
+    } else if (!u) {
+      html += signInMethods().map((m) =>
+        `<button type="button" class="ghost" data-act="signin" data-provider="${m}">Sign in with ${SIGN_IN[m].label}</button>`).join('');
+    } else if (!admin.is) {
+      html += `<p class="hint">${escHtml(u.email || 'This account')} isn't an admin. To make it one, add a document named with this user ID to the <code>admins</code> collection in the Firebase console:</p>`
+        + `<p class="uid"><code>${escHtml(u.uid)}</code></p>`
+        + '<div class="board-actions"><button type="button" class="ghost" data-act="copy-uid">Copy user ID</button>'
+        + '<button type="button" class="ghost" data-act="signout">Sign out</button></div>';
+    } else {
+      html += `<p class="hint">Signed in as ${escHtml(u.email || u.displayName || 'admin')}. Use &times; to delete one score.</p>`
+        + '<div class="board-actions"><button type="button" class="ghost danger" data-act="clear">Clear this board</button>'
+        + '<button type="button" class="ghost danger" data-act="clear-all">Clear all boards</button></div>'
+        + '<button type="button" class="ghost" data-act="signout">Sign out</button>';
+    }
+    if (admin.note) html += `<p class="hint admin-note">${escHtml(admin.note)}</p>`;
+    box.innerHTML = html;
+  }
+
+  // Deletes every score matching `filters` (every board when empty), 500 at a time.
+  async function deleteScores(filters) {
+    let total = 0;
+    for (;;) {
+      const token = await admin.user.getIdToken();
+      const query = { from: [{ collectionId: 'scores' }], select: { fields: [{ fieldPath: '__name__' }] }, limit: 500 };
+      if (filters.length) query.where = { compositeFilter: { op: 'AND', filters } };
+      const res = await fsCall(`/airports/${board.icao}:runQuery`, { structuredQuery: query }, token);
+      const names = res.filter((x) => x.document).map((x) => x.document.name);
+      if (!names.length) return total;
+      await fsCall(':commit', { writes: names.map((name) => ({ delete: name })) }, token);
+      total += names.length;
+    }
+  }
+
+  async function adminClear(all) {
+    if (!admin.is || admin.busy) return;
+    const [kind, pool] = board.showing.split('|');
+    const what = all
+      ? `every score on every ${board.icao} board (Quick 10 and Streak, every set of areas)`
+      : `every score on the ${kind === 'ten' ? 'Quick 10' : 'Streak'} board for ${poolLabel(pool)}`;
+    if (all) {
+      if (prompt(`This deletes ${what}. It can't be undone.\n\nType CLEAR to go ahead.`) !== 'CLEAR') return;
+    } else if (!confirm(`Delete ${what}? This can't be undone.`)) {
+      return;
+    }
+    const eq = (field, value) => ({ fieldFilter: { field: { fieldPath: field }, op: 'EQUAL', value: fsStr(value) } });
+    admin.busy = 'Deleting...';
+    renderAdmin();
+    try {
+      const n = await deleteScores(all ? [] : [eq('mode', kind), eq('pool', pool)]);
+      admin.note = `Deleted ${n} score${n === 1 ? '' : 's'}.`;
+    } catch {
+      admin.note = "Couldn't delete; some scores may be left. Try again.";
+    }
+    admin.busy = '';
+    board.cache.clear();
+    renderAdmin();
+    showBoard();
+  }
+
+  async function adminDeleteOne(id) {
+    if (!admin.is || admin.busy) return;
+    const r = (board.rows || []).find((x) => x.id === id);
+    if (!r || !confirm(`Delete ${r.name}'s score (${fmtTenths(r.ms)})? This can't be undone.`)) return;
+    try {
+      await fsCall(':commit', { writes: [{ delete: docName('scores', id) }] }, await admin.user.getIdToken());
+      admin.note = `Deleted ${r.name}'s score.`;
+    } catch {
+      admin.note = "Couldn't delete that score.";
+    }
+    board.cache.clear();
+    renderAdmin();
+    showBoard();
   }
 
   // ---------- edit ----------

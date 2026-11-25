@@ -82,6 +82,19 @@
       <button type="button" class="primary" id="streak-start">Start</button>
     </section>
 
+    <section class="block" id="board" hidden>
+      <h2 class="board-title">Leaderboard</h2>
+      <div class="board-sub" id="board-sub"></div>
+      <ol class="board" id="board-list"></ol>
+      <div class="board-actions" id="board-actions" hidden>
+        <button type="button" class="primary" data-act="save">Save score</button>
+        <button type="button" class="ghost" data-act="skip">Skip</button>
+      </div>
+      <p class="hint" id="board-note"></p>
+      <!-- only with ?admin: Google sign-in, then delete and clear tools -->
+      <div class="board-admin" id="board-admin" hidden></div>
+    </section>
+
     <section class="block" data-for="edit">
       <h2>Edit gates</h2>
       <p class="hint">Drag a marker to move it, then download <code>gates.json</code> and commit it to <code>data/sfo/</code>.</p>

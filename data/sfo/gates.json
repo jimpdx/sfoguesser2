@@ -469,14 +469,6 @@
    "src": "leadin"
   },
   {
-   "id": "D2",
-   "kind": "gate",
-   "area": "D",
-   "lat": 37.6167994,
-   "lon": -122.3821209,
-   "src": "manual"
-  },
-  {
    "id": "D3",
    "kind": "gate",
    "area": "D",

@@ -132,6 +132,63 @@ code { font-size: 14px; background: var(--panel-2); padding: 1px 4px; border-rad
 .legend i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; flex: none; }
 .legend i.sq { border-radius: 2px; }
 
+/* LEADERBOARD: arcade-style top 10 */
+#board { --mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace; }
+#board h2.board-title {
+  font: 800 22px/1.1 var(--mono); letter-spacing: 4px; color: #ffd43b;
+  text-shadow: 0 0 10px rgba(255, 212, 59, .45); margin-bottom: 2px;
+}
+.board-sub { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+.board {
+  list-style: none; margin: 0; padding: 0;
+  font: 700 15.5px/1.75 var(--mono); font-variant-numeric: tabular-nums;
+}
+.board li {
+  display: grid; grid-template-columns: 2.5ch 7ch 1fr 7ch; gap: 0 8px; align-items: center;
+  padding: 0 6px; border-radius: 4px;
+}
+.board .rk { color: var(--muted); text-align: right; }
+.board .sc, .board .tm { text-align: right; }
+.board .tm { color: var(--muted); font-weight: 600; }
+.board li.r1 { color: #ffd43b; }
+.board li.r2 { color: #dfe3e8; }
+.board li.r3 { color: #f0a868; }
+.board li.empty { color: #3a414c; }
+.board li.empty .rk { color: #3a414c; }
+.board li.new, .board li.mine { background: #1d3550; }
+.board li.mine { animation: board-blink .5s steps(1) 8; }
+@keyframes board-blink { 50% { color: transparent; } }
+.board input {
+  font: inherit; color: #fff; width: 100%; min-width: 0; padding: 0 4px; margin: 2px 0;
+  background: #06121f; border: 1px solid var(--accent); border-radius: 3px;
+  text-transform: uppercase; caret-color: #ffd43b;
+}
+.board-actions { display: flex; gap: 8px; }
+.board-actions .primary { flex: 1; }
+.ghost {
+  margin-top: 8px; padding: 9px 12px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+}
+.ghost:hover { color: var(--text); border-color: var(--muted); }
+#prompt .hs { font-weight: 700; color: #ffd43b; }
+/* ?admin view */
+#board.admin .board li { grid-template-columns: 2.5ch 7ch 1fr 7ch 1.4em; }
+.board .del {
+  font: 700 16px/1 system-ui, sans-serif; color: #ff8787; background: none; border: 0;
+  cursor: pointer; padding: 0; border-radius: 3px;
+}
+.board .del:hover { background: #4a1f24; }
+.board-admin { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.board-admin .admin-title { font-size: 14px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; color: #ff8787; }
+.board-admin .uid code { word-break: break-all; font-size: 13px; }
+.board-admin .ghost { width: 100%; }
+.board-admin .board-actions .ghost { flex: 1; }
+.ghost.danger { color: #ff8787; border-color: #6b2a31; }
+.ghost.danger:hover { color: #fff; background: #4a1f24; border-color: #ff8787; }
+@media (prefers-reduced-motion: reduce) {
+  .board li.mine { animation: none; }
+}
+
 /* at the top of the panel, at least as tall as the quiz banner, so the
    banner covers only this and not the controls below */
 #credits {
