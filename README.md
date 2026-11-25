@@ -51,41 +51,11 @@ Then open http://127.0.0.1:8000. This server turns browser caching off, so a nor
 
 ## Leaderboard
 
-Scores live in Firestore, in a Firebase project of their own. The page talks to Firestore's REST API with plain `fetch`, so there's still no library to load, and the site stays on GitHub Pages. With no project set in `data/sfo/airport.json` (`leaderboard.projectId`), the board is hidden and everything else works as before.
+Scores live in Firestore, in the Firebase project ksfo-ground-trainer. The page talks to Firestore's REST API with plain `fetch`, so the site stays a static GitHub Pages site with nothing to load. With no `leaderboard.projectId` in `data/sfo/airport.json`, the board is hidden and everything else works as before.
 
-How scores are kept honest (`firestore.rules`):
+`firestore.rules` keeps scores honest: Firestore stamps each run's start and end itself, each run posts once, times must fit what Firestore measured, nobody can edit a score, and only admins can delete one. Admins sign in on the hidden `?admin` view; the admin list lives in Firestore, not in this repo.
 
-- Starting a challenge creates a run record. Firestore stamps its start and end times itself, so the page can't fake them.
-- A score is posted together with marking its run used, so each run posts at most once.
-- The posted time has to fit the time Firestore measured for that run, and can't beat the floor the game sets: each correct answer holds the screen for 2 seconds.
-- Names must be 1 to 6 of A-Z, 0-9 and _, with a short list of rude words refused.
-- Nobody can edit a score, and only admins can delete one.
-
-Someone determined could still script a run that waits out the real time, so treat the board as a friendly one.
-
-### Admin view
-
-Add `?admin` to the URL and switch to Quick 10 or Streak. An Admin box under the board offers sign-in with Google or GitHub. Signed in as an admin, each score gets an × to delete it, plus "Clear this board" and "Clear all boards" (which asks you to type CLEAR). Firebase's sign-in library loads only in this view.
-
-The sign-in buttons come from `leaderboard.signIn` in `data/sfo/airport.json` (`google`, `github`); each one also has to be turned on in the Firebase console under Authentication, Sign-in method. GitHub needs an OAuth App (GitHub, Settings, Developer settings, OAuth Apps) whose callback or redirect URL is `https://ksfo-ground-trainer.firebaseapp.com/__/auth/handler`; its Client ID and client secret go into Firebase's GitHub panel, never into this repo. Firebase allows one account per email by default, so someone who signed in with Google can't then use GitHub with the same email; each admin sticks to one method.
-
-Admins are listed in Firestore, not in this repo: one document per admin in the `admins` collection, named by that account's Firebase user ID (any fields, such as a name). The rules check that list on every delete, so finding `?admin` gets a stranger nothing.
-
-- **Adding an admin**: they open `?admin`, sign in, and the page shows their user ID with a copy button. In the Firebase console, go to Firestore Database, open `admins` (or start that collection), and add a document with that ID.
-- **Removing an admin**: delete their document there.
-- **One-time setup**: in the Firebase console, turn on Google (and GitHub, if listed) under Authentication, Sign-in method, and add the site's domain (for example `jimpdx.github.io`) under Authentication, Settings, Authorized domains. `localhost` is allowed already, so test locally at http://localhost:8000/?admin rather than 127.0.0.1.
-
-The Firebase console can always delete scores directly too: Firestore Database, `airports/KSFO/scores`.
-
-Setting up a project (one time):
-
-1. `firebase login`, then create a project, turn on Firestore and register a web app (console or CLI).
-2. Put the project ID and the web app's API key in `data/sfo/airport.json` under `leaderboard`. Firebase web keys are meant to be public; the rules protect the data.
-3. Deploy the rules and the index: `firebase deploy --only firestore --project <project-id>`.
-
-To hand the board over, add the new owner to the Firebase project (Project settings, Users and permissions).
-
-Testing locally: `firebase emulators:start --only firestore --project demo-ksfo` runs a throwaway Firestore on port 8085 with the same rules. Open http://127.0.0.1:8000/?emulator to play against it; scores vanish when the emulator stops.
+**[docs/leaderboard.md](docs/leaderboard.md)** covers the rest: the admin view, adding and removing admins, Google and GitHub sign-in, the Firebase console, deploying rule changes, testing with the local emulator (`?emulator`), and handing the project over.
 
 ## Updating gates
 
