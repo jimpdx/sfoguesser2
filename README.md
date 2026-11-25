@@ -81,7 +81,7 @@ These need Python 3 with Pillow. Outputs go to `data/sfo/`; downloads are cached
 
 After editing anything in `tools/build_chart.py`, run `python -I tools/build_chart.py` to regenerate `data/sfo/chart.svg`, `runways.json` and `taxiways.json`; the page only reads those generated files.
 
-Taxiway letters are placed automatically, except for rows lined up by hand in `ALIGNED` at the top of the taxiway section of `tools/build_chart.py`: Q, K, D, T and E across the exits between runway 28L and taxiway B, and W, G, H, M and M1 east of taxiway B, halfway to runway 1L. Add a row there to line up others. `MOVED` in the same file shifts single letters (the B between T and E).
+Taxiway letters are placed automatically, except for rows lined up by hand in `ALIGNED` at the top of the taxiway section of `tools/build_chart.py`: Q, K, D, T and E across the exits between runway 28L and taxiway B, and F, W, G, H, M and M1 east of taxiway B, halfway to runway 1L. Add a row there to line up others. `MOVED` in the same file shifts single letters (the B between T and E), and `DROP_WAYS` leaves OSM taxiways off the diagram and the overlay (a curve onto F at B that OSM calls J).
 
 The spot lanes are drawn tidier than OpenStreetMap has them (`LANE_LENGTHS`): the 5, 6 and 7 lanes each run 200 m in from taxiway A and pass through their spot markers, and lanes 8 and 9 run 287.5 m straight on from B4 and B5. Taxilanes M3, M4 and M5 are trimmed so their north ends line up (`M_LANES`).
 

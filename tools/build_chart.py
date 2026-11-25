@@ -134,6 +134,8 @@ class Builder:
                 elif aw in ("taxiway", "taxilane"):
                     # pavement only; centerlines and letters are the app's
                     # Taxiways overlay (taxiways.json)
+                    if e["id"] in DROP_WAYS:
+                        continue
                     w = float(t.get("width", DEFAULT_TWY_WIDTH) or DEFAULT_TWY_WIDTH)
                     out["twy"].append(f'<path d="{self.path(p, False)}" stroke-width="{fmt(w)}"/>')
                 elif aw == "runway":
@@ -258,8 +260,14 @@ ALIGNED = [
     # exits between runway 10R/28L (y -743) and taxiway B (y -624)
     {"refs": ["Q", "K", "D", "T", "E"], "y": -663, "mode": "move"},
     # east of B, halfway to runway 1L (B x 614, 1L x 735), north to south
-    {"refs": ["W", "G", "H", "M", "M1"], "x": 665, "mode": "add"},
+    {"refs": ["F", "W", "G", "H", "M", "M1"], "x": 665, "mode": "add"},
 ]
+
+# OSM taxiways left off the diagram and the Taxiways overlay, by OSM way id.
+DROP_WAYS = {
+    1562117374,  # curve onto F at B, tagged "J" in OSM; not on the 10-9B
+    157111950,   # unnamed stub that fed that curve from B
+}
 
 # Single letters moved by hand: the automatic letter of `ref` nearest the
 # aligned letter `from_near` moves onto `ref`, centered between the aligned
@@ -400,6 +408,8 @@ def build_taxiways(airport, osm, runways):
             continue
         p = [frame.to_frame(q["lat"], q["lon"]) for q in e["geometry"]]
         if not any(x0 - pad <= x <= x1 + pad and y0 - pad <= y <= y1 + pad for x, y in p):
+            continue
+        if e["id"] in DROP_WAYS:
             continue
         raw.append((t.get("ref", ""), p))
     raw = tidy_lanes(raw, frame)
