@@ -25,7 +25,7 @@ All gates and spots come from the Jeppesen 10-9B dated 23 OCT 26 (effective 29 O
 - **115 gates**: A1-A15, B1-B27, C1 and C3-C11, D1, D3-D12 and D14-D16, E1-E13, F1-F22, G1-G14.
 - **No separate sub-positions**: the lettered ones (A4R, A4T, B5S, D8V, D12A, E10U, F3A, G12S and the rest) are folded into their base gate, since controllers call them by the base gate ("Alpha Four").
 - **Not included**: C2 (gone from the current chart), D2 (closed when Southwest moved into Terminal 2: jet bridge removed, the stand now holds equipment) and the remote stands G103-G105, Plot 2, Plot 6 and Plot 9.
-- **18 spots**: 1, 2, 3, 4, 4A, 5, 5A, 5B, 6, 6A, 6B, 7, 7A, 7B, 8, 9, 10, 11.
+- **19 spots**: 1, 2, 3, 4, 4A, 5, 5A, 5B, 5Y, 6, 6A, 6B, 7, 7A, 7B, 8, 9, 10, 11.
 
 Where each point came from:
 
@@ -36,6 +36,7 @@ Where each point came from:
   - E1 and F1-F4, from the chart labels. These are in the Terminal 3 West construction zone in the satellite photo.
 - **16 spots**: placed on the blue painted boxes visible in the satellite photo. The 5s and 6s are spread to the same spacing as the 7s (about 27 m apart instead of 21 m) so they're easier to tell apart.
 - **Spots 10 and 11**: follow the chart. Plot 9 has been rebuilt since the photo was taken, so these two are worth a check by someone who knows the current layout.
+- **Spot 5Y**: on neither the chart nor the photo. It sits on the taxilane Y centerline by B7, about 32 m south of the alley line at Y's north end, where a waiting aircraft doesn't block the way in and out of the ramp. Worth a check against a photo.
 
 The `src` field in `data/sfo/gates.json` records each point's source.
 
@@ -66,7 +67,7 @@ When SFO renumbers or moves gates:
 
 To add or remove a gate, edit `data/sfo/gates.json` by hand (each point has an id, kind, area, lat and lon), then fine-tune its position in edit mode.
 
-Labels sit above each marker. Where neighbors crowd that space, a point can carry `"label": "left"` or `"label": "right"` (F20-F22 use left; spots 5, 5A and 5B use right).
+Labels sit above each marker. Where neighbors crowd that space, a point can carry `"label": "left"` or `"label": "right"` (F20-F22 use left; spots 5, 5A, 5B and 5Y use right).
 
 Edit mode can lay a new chart over the map as a placement guide. Take a screenshot of the new 10-9B, read two longitude ticks and two latitude ticks off its border in pixels, and run:
 

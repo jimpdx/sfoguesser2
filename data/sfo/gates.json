@@ -1035,6 +1035,15 @@
    "label": "right"
   },
   {
+   "id": "5Y",
+   "kind": "spot",
+   "area": "spots",
+   "lat": 37.6133459,
+   "lon": -122.3826841,
+   "src": "manual",
+   "label": "right"
+  },
+  {
    "id": "6",
    "kind": "spot",
    "area": "spots",

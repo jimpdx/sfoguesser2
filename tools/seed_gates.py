@@ -48,7 +48,7 @@ GATES = (
     + [f"G{i}" for i in range(1, 15)]
 )
 
-SPOTS = ["1", "2", "3", "4", "4A", "5", "5A", "5B", "6", "6A", "6B", "7", "7A", "7B", "8", "9", "10", "11"]
+SPOTS = ["1", "2", "3", "4", "4A", "5", "5A", "5B", "5Y", "6", "6A", "6B", "7", "7A", "7B", "8", "9", "10", "11"]
 
 # Frame meters (x right, y down), read off the satellite image with the
 # 10-9B overlaid (tools/reference_overlay.py).
@@ -76,6 +76,10 @@ MANUAL = {
     "5": (486, -199),
     "5A": (486, -226),
     "5B": (486, -172),
+    # On the taxilane Y centerline by B7, about 32 m south of the alley
+    # line at Y's north end (y 65). Not on the 23 OCT 26 chart or the
+    # imagery.
+    "5Y": (472, 97),
     "6": (178, -498),
     "6A": (151, -498),
     "6B": (205, -498),
@@ -92,7 +96,7 @@ MANUAL = {
 
 
 # Labels go above markers except where neighbors crowd that space.
-LABEL_SIDE = {"5": "right", "5A": "right", "5B": "right", "F20": "left", "F21": "left", "F22": "left"}
+LABEL_SIDE = {"5": "right", "5A": "right", "5B": "right", "5Y": "right","F20": "left", "F21": "left", "F22": "left"}
 
 
 def natural(s):
